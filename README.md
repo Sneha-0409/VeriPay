@@ -40,7 +40,7 @@ Only after these checks does VeriPay launch the preferred UPI application using 
 
 ---
 
-# Workflow
+# Workflow of the Project
 
 ```text
           🎤 Voice Command

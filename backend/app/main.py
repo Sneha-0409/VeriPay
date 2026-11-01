@@ -268,6 +268,7 @@ from backend.app.schemas import (
     PaymentContextRequest,
 )
 from backend.app.voice.transcription import transcribe_audio
+from backend.app.voice.intent_extraction import extract_payment_intent
 
 
 app = FastAPI(
@@ -531,7 +532,112 @@ def predict_context(data: ContextPredictionRequest):
             detail="Hybrid prediction failed. Check backend logs.",
         )
 
+@app.post("/voice-payment")
+async def voice_payment(file: UploadFile = File(...)):
+    """Transcribe a voice command, extract payment intent, and assess context."""
 
+    try:
+        if file.content_type not in (
+            "audio/wav",
+            "audio/x-wav",
+            "audio/wave",
+            "application/octet-stream",
+        ):
+            raise HTTPException(
+                status_code=415,
+                detail="Please upload a WAV audio file.",
+            )
+
+        audio_bytes = await file.read()
+
+        if not audio_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded audio file is empty.",
+            )
+
+        if len(audio_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(
+                status_code=413,
+                detail="Audio file must be smaller than 10 MB.",
+            )
+
+        # Step 1: Speech-to-text
+        transcript = transcribe_audio(audio_bytes)
+
+        # Step 2: Extract payment intent
+        intent = extract_payment_intent(transcript)
+
+        if intent["intent"] != "PAYMENT" or intent["requires_clarification"]:
+            return {
+                "status": "CLARIFICATION_REQUIRED",
+                "transcript": transcript,
+                "intent": intent,
+                "reason": "Payment details are incomplete or unclear.",
+                "payment_execution": "NOT_EXECUTED",
+            }
+
+        # Step 3: Resolve recipient against saved contacts
+        profile = get_recipient_profile(intent["recipient_name"])
+
+        if not profile["found"]:
+            return {
+                "status": "CLARIFICATION_REQUIRED",
+                "transcript": transcript,
+                "intent": intent,
+                "reason": (
+                    "Recipient could not be uniquely matched "
+                    "to a saved contact."
+                ),
+                "payment_execution": "NOT_EXECUTED",
+            }
+
+        recipient = profile["recipient"]
+
+        # Do not assess or proceed with inactive/unverified recipients.
+        if not recipient["is_active"] or not recipient["verified_by_user"]:
+            return {
+                "status": "VERIFICATION_REQUIRED",
+                "transcript": transcript,
+                "intent": intent,
+                "recipient": recipient,
+                "reason": "Recipient requires verification.",
+                "payment_execution": "NOT_EXECUTED",
+            }
+
+        # Step 4: Run the existing context assessment.
+        # These confidence values are provisional demo assumptions,
+        # not confidence scores produced by Whisper.
+        assessment = assess_context(
+            ContextAssessmentRequest(
+                recipient_name=recipient["name"],
+                amount=intent["amount"],
+                recipient_match_confidence=0.95,
+                voice_intent_confidence=0.95,
+            )
+        )
+
+        return {
+            "status": "ASSESSMENT_COMPLETED",
+            "transcript": transcript,
+            "intent": intent,
+            "assessment": assessment,
+            "payment_execution": "NOT_EXECUTED",
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception:
+        logger.exception("Voice payment assessment failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Voice payment assessment failed. Check backend logs.",
+        )
+    finally:
+        await file.close()
+        
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     """Transcribe a WAV audio recording."""

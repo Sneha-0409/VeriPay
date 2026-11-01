@@ -74,16 +74,18 @@ def get_recipient_profile(
     if not search_value:
         raise ValueError("Recipient name cannot be empty.")
 
-    recipient = next(
-        (
-            item for item in recipients
-            if search_value in (
-                item.get("name", "").casefold(),
-                item.get("recipient_id", "").casefold(),
-            )
-        ),
-        None,
-    )
+    # Match exact names, recipient IDs, or unique name tokens.
+    matches = [
+        item for item in recipients
+        if (
+            search_value == item.get("name", "").casefold()
+            or search_value == item.get("recipient_id", "").casefold()
+            or search_value in item.get("name", "").casefold().split()
+        )
+    ]
+
+    # Never select a recipient if multiple contacts match.
+    recipient = matches[0] if len(matches) == 1 else None
 
     if recipient is None:
         return {

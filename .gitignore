@@ -1,2 +1,17 @@
 *.csv
 *.pkl
+*.pt
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment / OS
+.DS_Store
+.env
+
+# Logs
+logs/
+*.log

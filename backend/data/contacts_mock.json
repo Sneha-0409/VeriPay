@@ -1,0 +1,41 @@
+{
+    "dataset_type": "SYNTHETIC_DEMO_DATA",
+    "version": 1,
+    "users": [
+        {
+            "user_id": "demo_user_001",
+            "recipients": [
+                {
+                    "recipient_id": "recipient_001",
+                    "name": "Rahul Sharma",
+                    "upi_id": "rahul.demo@upi",
+                    "is_active": true,
+                    "verified_by_user": true,
+                    "first_added": "2026-08-01",
+                    "last_paid": "2026-10-28",
+                    "total_transactions": 12
+                },
+                {
+                    "recipient_id": "recipient_002",
+                    "name": "Priya Verma",
+                    "upi_id": "priya.demo@upi",
+                    "is_active": true,
+                    "verified_by_user": true,
+                    "first_added": "2026-08-15",
+                    "last_paid": "2026-10-25",
+                    "total_transactions": 8
+                },
+                {
+                    "recipient_id": "recipient_003",
+                    "name": "Amit Kumar",
+                    "upi_id": "amit.demo@upi",
+                    "is_active": true,
+                    "verified_by_user": true,
+                    "first_added": "2026-09-10",
+                    "last_paid": "2026-10-20",
+                    "total_transactions": 3
+                }
+            ]
+        }
+    ]
+}

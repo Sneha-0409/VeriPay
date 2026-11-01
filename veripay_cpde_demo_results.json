@@ -1,0 +1,42 @@
+{
+    "real_transaction": {
+        "fraud_probability": 0.01,
+        "intent_confidence": 0.46234655380249023,
+        "voice_risk": 0.5376534461975098,
+        "cpde_score": 0.16829603385925293,
+        "risk_level": "LOW",
+        "decision": "PROCEED",
+        "reasons": [
+            "Voice intent confidence is low, indicating uncertainty in the spoken command."
+        ],
+        "intent": "loan_query",
+        "intent_class": 9
+    },
+    "high_risk_demo": {
+        "fraud_probability": 0.8,
+        "intent_confidence": 0.46234655380249023,
+        "voice_risk": 0.5376534461975098,
+        "cpde_score": 0.7212960338592529,
+        "risk_level": "HIGH",
+        "decision": "BLOCK",
+        "reasons": [
+            "Transaction fraud probability is above the configured threshold.",
+            "Voice intent confidence is low, indicating uncertainty in the spoken command."
+        ],
+        "intent": "loan_query",
+        "intent_class": 9
+    },
+    "medium_risk_demo": {
+        "fraud_probability": 0.35,
+        "intent_confidence": 0.46234655380249023,
+        "voice_risk": 0.5376534461975098,
+        "cpde_score": 0.4062960338592529,
+        "risk_level": "MEDIUM",
+        "decision": "WARN",
+        "reasons": [
+            "Voice intent confidence is low, indicating uncertainty in the spoken command."
+        ],
+        "intent": "loan_query",
+        "intent_class": 9
+    }
+}

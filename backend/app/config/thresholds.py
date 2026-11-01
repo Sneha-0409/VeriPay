@@ -1,4 +1,5 @@
 FRAUD_THRESHOLD = 0.45
+RECIPIENT_MATCH_THRESHOLD = 0.50
 
 # 0.45 — selected because it maximized F1-score on the IEEE-CIS test 
 # set (F1 = 0.7779).

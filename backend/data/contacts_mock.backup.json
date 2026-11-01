@@ -16,16 +16,6 @@
                     "total_transactions": 12
                 },
                 {
-                    "recipient_id": "recipient_004",
-                    "name": "Rahul Verma",
-                    "upi_id": "rahul.verma.demo@upi",
-                    "is_active": true,
-                    "verified_by_user": true,
-                    "first_added": "2026-10-01",
-                    "last_paid": "2026-10-20",
-                    "total_transactions": 2
-                },
-                {
                     "recipient_id": "recipient_002",
                     "name": "Priya Verma",
                     "upi_id": "priya.demo@upi",
@@ -40,7 +30,7 @@
                     "name": "Amit Kumar",
                     "upi_id": "amit.demo@upi",
                     "is_active": true,
-                    "verified_by_user": true,
+                    "verified_by_user": false,
                     "first_added": "2026-09-10",
                     "last_paid": "2026-10-20",
                     "total_transactions": 3

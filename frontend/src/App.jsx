@@ -432,18 +432,20 @@ function App() {
       setVoiceResult(data);
       setResult(null);
       setError("");
+      setForm((prev) => ({
+        ...prev,
+        recipient: data.intent?.recipient_name || prev.recipient,
+        amount: data.intent?.amount ?? prev.amount,
+        recipientKnown: data.status === "ASSESSMENT_COMPLETED",
+      }));
 
       if (data.status === "CLARIFICATION_REQUIRED") {
-        setVoiceStatus(
-          `Clarification required: ${data.reason}`
-        );
+        setVoiceStatus(`Clarification required: ${data.reason}`);
         return;
       }
 
       if (data.status === "VERIFICATION_REQUIRED") {
-        setVoiceStatus(
-          `Recipient verification required: ${data.reason}`
-        );
+        setVoiceStatus(`Recipient verification required: ${data.reason}`);
         return;
       }
 
@@ -744,7 +746,9 @@ function App() {
                 and extracted details before running the risk
                 assessment.
               </p>
-
+              <p className="field-note">
+                <strong>Payment details for assessment</strong>
+              </p>
               <div className="form-row">
                 <div>
                   <label>Recipient</label>

@@ -1,8 +1,9 @@
+
 from functools import lru_cache
 import io
+
 import numpy as np
 import soundfile as sf
-from transformers import pipeline
 
 
 MODEL_NAME = "openai/whisper-tiny"
@@ -10,7 +11,9 @@ MODEL_NAME = "openai/whisper-tiny"
 
 @lru_cache(maxsize=1)
 def get_transcriber():
-    """Load Whisper Tiny once and reuse it for future requests."""
+    """Load Whisper Tiny only when transcription is requested."""
+    from transformers import pipeline
+
     return pipeline(
         "automatic-speech-recognition",
         model=MODEL_NAME,
@@ -20,7 +23,7 @@ def get_transcriber():
 
 def transcribe_audio(audio_bytes: bytes) -> str:
     """
-    Convert uploaded WAV audio into a transcript.
+    Convert uploaded audio into a transcript.
     Audio is converted to mono, 16 kHz before transcription.
     """
     try:
@@ -61,4 +64,6 @@ def transcribe_audio(audio_bytes: bytes) -> str:
         return transcript
 
     except Exception as exc:
-        raise ValueError(f"Audio transcription failed: {exc}") from exc
+        raise ValueError(
+            f"Audio transcription failed: {exc}"
+        ) from exc

@@ -60,36 +60,62 @@
 #         "scoring_weights": weights,
 #     }
 
-
 def score_payment_context(features: dict) -> dict:
-    """Apply the six-signal CPDE decision policy from the research notebook."""
+    """
+    Apply the six-signal CPDE decision policy.
+
+    Returns:
+        risk_score: Score between 0 and 1, or None if clarification is needed.
+        risk_level: LOW, MEDIUM, HIGH, or UNASSESSED.
+        decision: ALLOW, CONFIRM, BLOCK, or CLARIFY.
+    """
+
+    # ---------------------------------------------------------
+    # 1. Read input features
+    # ---------------------------------------------------------
 
     intent_confidence = float(features["intent_confidence"])
     fraud_probability = float(features["fraud_probability"])
     amount_deviation = float(features["amount_deviation"])
+
     is_new_recipient = bool(features["is_new_recipient"])
     recipient_match_count = int(features["recipient_match_count"])
+
     urgency_detected = bool(features["urgency_detected"])
     unusual_time = bool(features["unusual_time"])
     repeated_failures = bool(features["repeated_failures"])
     is_payment = bool(features["is_payment"])
+
+    # ---------------------------------------------------------
+    # 2. Validate numerical values
+    # ---------------------------------------------------------
 
     for name, value in {
         "intent_confidence": intent_confidence,
         "fraud_probability": fraud_probability,
         "amount_deviation": amount_deviation,
     }.items():
+
         if not 0.0 <= value <= 1.0:
             raise ValueError(f"{name} must be between 0 and 1.")
 
+    # ---------------------------------------------------------
+    # 3. Clarification policy
+    # ---------------------------------------------------------
+
     if intent_confidence < 0.55 or recipient_match_count != 1:
+
         reasons = []
 
         if intent_confidence < 0.55:
-            reasons.append("Voice intent confidence is too low.")
+            reasons.append(
+                "Voice intent confidence is too low."
+            )
 
         if recipient_match_count != 1:
-            reasons.append("Recipient is missing or ambiguous.")
+            reasons.append(
+                "Recipient is missing or ambiguous."
+            )
 
         return {
             "risk_score": None,
@@ -100,6 +126,10 @@ def score_payment_context(features: dict) -> dict:
             "reasons": reasons,
         }
 
+    # ---------------------------------------------------------
+    # 4. Calculate contextual risk signals
+    # ---------------------------------------------------------
+
     signals = {
         "fraud_probability": fraud_probability,
         "amount_deviation": amount_deviation,
@@ -108,6 +138,10 @@ def score_payment_context(features: dict) -> dict:
         "unusual_time": float(unusual_time),
         "repeated_failures": float(repeated_failures),
     }
+
+    # ---------------------------------------------------------
+    # 5. CPDE weights
+    # ---------------------------------------------------------
 
     weights = {
         "fraud_probability": 0.40,
@@ -118,12 +152,27 @@ def score_payment_context(features: dict) -> dict:
         "repeated_failures": 0.10,
     }
 
+    # ---------------------------------------------------------
+    # 6. Calculate weighted risk score
+    # ---------------------------------------------------------
+
     risk_score = round(
-        min(1.0, max(0.0, sum(
-            signals[name] * weights[name] for name in signals
-        ))),
+        min(
+            1.0,
+            max(
+                0.0,
+                sum(
+                    signals[name] * weights[name]
+                    for name in signals
+                ),
+            ),
+        ),
         4,
     )
+
+    # ---------------------------------------------------------
+    # 7. Explainable risk reasons
+    # ---------------------------------------------------------
 
     reasons = [
         f"{name.replace('_', ' ').title()} contributes to transaction risk."
@@ -131,18 +180,80 @@ def score_payment_context(features: dict) -> dict:
         if signal > 0
     ]
 
-    if risk_score >= 0.65:
-        decision, risk_level = "BLOCK", "HIGH"
-    elif risk_score >= 0.30:
-        decision, risk_level = "CONFIRM", "MEDIUM"
+    # ---------------------------------------------------------
+    # 8. Additional safety rules
+    # ---------------------------------------------------------
+
+    extreme_amount_deviation = amount_deviation >= 0.90
+
+    high_risk_combination = (
+        extreme_amount_deviation
+        and is_new_recipient
+        and urgency_detected
+    )
+
+    very_high_fraud_probability = fraud_probability >= 0.85
+
+    # ---------------------------------------------------------
+    # 9. Final risk decision
+    # ---------------------------------------------------------
+
+    if (
+        risk_score >= 0.65
+        or high_risk_combination
+        or very_high_fraud_probability
+    ):
+
+        decision = "BLOCK"
+        risk_level = "HIGH"
+
+        if high_risk_combination:
+            reasons.append(
+                "Extreme amount deviation combined with a new "
+                "recipient and urgency requires additional verification."
+            )
+
+        if very_high_fraud_probability:
+            reasons.append(
+                "Fraud model probability is extremely high."
+            )
+
+    elif risk_score >= 0.30 or extreme_amount_deviation:
+
+        decision = "CONFIRM"
+        risk_level = "MEDIUM"
+
+        if extreme_amount_deviation:
+            reasons.append(
+                "Payment amount deviates significantly from usual behavior."
+            )
+
     elif is_payment:
-        decision, risk_level = "CONFIRM", "LOW"
-        reasons.append("Explicit user confirmation is required before payment.")
+
+        decision = "CONFIRM"
+        risk_level = "LOW"
+
+        reasons.append(
+            "Explicit user confirmation is required before payment."
+        )
+
     else:
-        decision, risk_level = "ALLOW", "LOW"
+
+        decision = "ALLOW"
+        risk_level = "LOW"
+
+    # ---------------------------------------------------------
+    # 10. Fallback explanation
+    # ---------------------------------------------------------
 
     if not reasons:
-        reasons.append("No configured risk signal was triggered.")
+        reasons.append(
+            "No configured risk signal was triggered."
+        )
+
+    # ---------------------------------------------------------
+    # 11. Return CPDE result
+    # ---------------------------------------------------------
 
     return {
         "risk_score": risk_score,

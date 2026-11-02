@@ -776,16 +776,28 @@ async def voice_payment(file: UploadFile = File(...)):
         profile = get_recipient_profile(intent["recipient_name"])
 
         if not profile["found"]:
-            return {
-                "status": "CLARIFICATION_REQUIRED",
+        # Multiple contacts match: ask the user to choose.
+            if profile["match_count"] > 1:
+                return {
+                "status": "RECIPIENT_SELECTION_REQUIRED",
                 "transcript": transcript,
                 "intent": intent,
-                "reason": (
-                    "Recipient could not be uniquely matched "
-                    "to a saved contact."
-                ),
+                "recipient_match_count": profile["match_count"],
+                "candidate_recipients": profile["candidate_recipients"],
+                "reason": profile["clarification_message"],
                 "payment_execution": "NOT_EXECUTED",
             }
+
+        # No matching contact found.
+        return {
+            "status": "RECIPIENT_NOT_FOUND",
+            "transcript": transcript,
+            "intent": intent,
+            "recipient_match_count": 0,
+            "candidate_recipients": [],
+            "reason": "No saved contact matched the requested recipient.",
+            "payment_execution": "NOT_EXECUTED",
+        }
 
         recipient = profile["recipient"]
 
@@ -802,13 +814,14 @@ async def voice_payment(file: UploadFile = File(...)):
         # Provisional demo confidence values.
         # These are not confidence scores produced by Whisper.
         assessment = assess_context(
-            ContextAssessmentRequest(
-                recipient_name=recipient["name"],
-                amount=intent["amount"],
-                recipient_match_confidence=0.95,
-                voice_intent_confidence=0.95,
-            )
+        ContextAssessmentRequest(
+            recipient_name=recipient["name"],
+            amount=intent["amount"],
+            recipient_match_confidence=0.95,
+            voice_intent_confidence=0.95,
+            urgency_detected=intent["urgency_detected"],
         )
+    )
 
         return {
             "status": "ASSESSMENT_COMPLETED",

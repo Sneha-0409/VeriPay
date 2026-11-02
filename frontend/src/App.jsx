@@ -1196,17 +1196,17 @@ function App() {
       }
 
       const payload = {
-        recipient_name: form.recipient,
-        amount: Number(form.amount),
-        typical_amount: Number(form.typicalAmount),
-        recipient_known: form.recipientKnown,
-        recipient_match_confidence: Number(
-          form.recipientMatch
-        ),
-        voice_intent_confidence: Number(
-          form.voiceConfidence
-        ),
         transaction_features: parsedFeatures,
+        context: {
+          recipient_is_known: form.recipientKnown,
+          amount: Number(form.amount),
+          typical_amount: Number(form.typicalAmount),
+          recipient_match_confidence: Number(form.recipientMatch),
+          voice_intent_confidence: Number(form.voiceConfidence),
+          urgency_detected: false,
+          unusual_time: false,
+          repeated_failures: false,
+        },
       };
 
       const response = await fetch(

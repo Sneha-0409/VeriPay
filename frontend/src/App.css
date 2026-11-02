@@ -2094,6 +2094,7 @@ textarea {
 
 /* Primary Mobile Breakpoint (<= 768px) */
 @media (max-width: 768px) {
+
   /* 1. Mobile Sidebar & Slide-in Drawer */
   .hamburger-btn {
     display: flex !important;
@@ -2504,4 +2505,95 @@ textarea {
     grid-template-columns: 1fr !important;
     gap: 8px !important;
   }
+}
+
+.recipient-selection-card {
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid rgba(184, 132, 255, 0.35);
+  border-radius: 16px;
+  background: rgba(155, 92, 255, 0.07);
+}
+
+.recipient-selection-heading h4 {
+  margin: 8px 0;
+  font-size: 17px;
+  color: #f5efff;
+}
+
+.recipient-selection-heading p {
+  margin: 0 0 16px;
+  color: #aaa0bb;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.recipient-options {
+  display: grid;
+  gap: 10px;
+}
+
+.recipient-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  color: #f5efff;
+  background: #17111f;
+  border: 1px solid #382747;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.recipient-option:hover {
+  border-color: #b884ff;
+  background: #21152e;
+}
+
+.recipient-avatar {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #39244f;
+  color: #d8baff;
+  font-weight: 700;
+}
+
+.recipient-option-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.recipient-option-details strong {
+  font-size: 14px;
+}
+
+.recipient-option-details small {
+  color: #a89bb8;
+  font-size: 12px;
+}
+
+.recipient-select-arrow {
+  color: #c49aff;
+  font-size: 20px;
+}
+
+.recipient-safety-note,
+.recipient-selected-note {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #a89bb8;
+}
+
+.recipient-selected-note {
+  color: #58d6a5;
 }

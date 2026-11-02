@@ -17,6 +17,13 @@
                 },
                 {
                     "recipient_id": "recipient_002",
+                    "name": "Rahul Verma",
+                    "upi_id": "rahul.verma@mockupi",
+                    "verified_by_user": false,
+                    "is_active": true
+                },
+                {
+                    "recipient_id": "recipient_002",
                     "name": "Priya Verma",
                     "upi_id": "priya.demo@upi",
                     "is_active": true,

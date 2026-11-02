@@ -1,5 +1,5 @@
 
-// import { useState, useRef } from "react";
+// import { useState, useRef, useEffect } from "react";
 // import "./App.css";
 
 // const API_URL = "http://127.0.0.1:8000";
@@ -779,7 +779,7 @@
 
 // export default App;
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import "./App.css";
 
 const API_URL = "http://127.0.0.1:8000";
@@ -949,9 +949,32 @@ function App() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    if (mobileNavOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && mobileNavOpen) {
+        setMobileNavOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileNavOpen]);
 
   function goTo(page) {
     setActivePage(page);
+    setMobileNavOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function update(field, value) {
@@ -1250,14 +1273,37 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">V</div>
+      {/* Mobile Drawer Backdrop */}
+      <div
+        className={`sidebar-backdrop ${mobileNavOpen ? "open" : ""}`}
+        onClick={() => setMobileNavOpen(false)}
+        aria-hidden="true"
+      />
 
-          <div>
-            <h2>VeriPay</h2>
-            <span>VERIFY BEFORE YOU PAY</span>
+      <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
+        <div className="sidebar-header">
+          <div
+            className="brand"
+            onClick={() => goTo("dashboard")}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="brand-mark">V</div>
+
+            <div>
+              <h2>VeriPay</h2>
+              <span>VERIFY BEFORE YOU PAY</span>
+            </div>
           </div>
+
+          <button
+            type="button"
+            className="sidebar-close-btn"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Close navigation menu"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="sidebar-label">WORKSPACE</div>
@@ -1325,21 +1371,39 @@ function App() {
 
       <main className="main-content">
         <header className="topbar">
-          <div className="breadcrumb">
-            Workspace <span>/</span>{" "}
-            {activePage === "dashboard"
-              ? "Dashboard"
-              : activePage === "payment"
-                ? "Payment check"
-                : "Security insights"}
+          <div className="topbar-left">
+            <button
+              type="button"
+              className="hamburger-btn"
+              onClick={() => setMobileNavOpen((prev) => !prev)}
+              aria-label="Open navigation menu"
+              aria-expanded={mobileNavOpen}
+            >
+              <span className="hamburger-line"></span>
+              <span className="hamburger-line"></span>
+              <span className="hamburger-line"></span>
+            </button>
+
+            <div className="breadcrumb">
+              <span className="breadcrumb-root">Workspace</span>
+              <span className="breadcrumb-separator">/</span>
+              <span className="breadcrumb-current">
+                {activePage === "dashboard"
+                  ? "Dashboard"
+                  : activePage === "payment"
+                    ? "Payment check"
+                    : "Security insights"}
+              </span>
+            </div>
           </div>
 
           <div className="topbar-right">
             <span className="prototype-pill">
-              <span></span> PROTOTYPE MODE
+              <span className="prototype-dot"></span>
+              <span className="prototype-text">PROTOTYPE MODE</span>
             </span>
 
-            <div className="topbar-avatar">S</div>
+            <div className="topbar-avatar" title="Demo user (Personal account)">S</div>
           </div>
         </header>
 

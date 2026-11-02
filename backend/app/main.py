@@ -10,16 +10,19 @@
 #     extract_context_features,
 # )
 # from backend.app.risk.scorer import score_payment_context
+# from backend.app.risk.profile_store import get_recipient_profile
 # from backend.app.schemas import (
+#     ContextAssessmentRequest,
 #     ContextPredictionRequest,
 #     PaymentContextRequest,
 # )
 # from backend.app.voice.transcription import transcribe_audio
+# from backend.app.voice.intent_extraction import extract_payment_intent
 
 
 # app = FastAPI(
 #     title="VeriPay CPDE API",
-#     version="0.4.0",
+#     version="0.5.0",
 # )
 
 # app.add_middleware(
@@ -36,7 +39,7 @@
 # )
 
 
-# logger.info("IEEE-CIS Random Forest model loaded successfully")
+# logger.info("VeriPay API initialized")
 
 
 # @app.get("/health")
@@ -45,6 +48,8 @@
 
 
 # def build_payment_context(data: PaymentContextRequest) -> PaymentContext:
+#     """Build context for the existing hybrid assessment."""
+
 #     return PaymentContext(
 #         recipient_is_known=data.recipient_is_known,
 #         amount=data.amount,
@@ -54,8 +59,22 @@
 #     )
 
 
+# def get_payment_decision(risk):
+#     decision = risk["decision"]
+
+#     if decision == "BLOCK":
+#         return "BLOCK"
+
+#     if decision == "REQUEST_CLARIFICATION":
+#         return "REQUEST_CLARIFICATION"
+
+#     return "AWAITING_CONFIRMATION"
+
+
 # @app.post("/predict")
 # def predict(data: list[float | None]):
+#     """Run the standalone IEEE-CIS fraud model."""
+
 #     try:
 #         probability = predict_fraud_probability(data)
 #         risk = assess_risk(fraud_probability=probability)
@@ -67,6 +86,7 @@
 #         )
 
 #         return {
+#             "assessment_type": "ML_ONLY",
 #             "prediction": int(probability >= FRAUD_THRESHOLD),
 #             "fraud_probability": probability,
 #             "threshold": FRAUD_THRESHOLD,
@@ -83,18 +103,45 @@
 #         logger.exception("Prediction failed")
 #         raise HTTPException(
 #             status_code=500,
-#             detail="Prediction failed. Check the backend logs.",
+#             detail="Prediction failed. Check backend logs.",
 #         )
 
 
 # @app.post("/assess-context")
-# def assess_context(data: PaymentContextRequest):
+# def assess_context(data: ContextAssessmentRequest):
 #     """
-#     Assess voice-payment context without invoking the IEEE-CIS model.
+#     Assess payment context using backend-managed recipient history.
+#     The IEEE-CIS model is not invoked by this endpoint.
 #     """
 
 #     try:
-#         context = build_payment_context(data)
+#         profile = get_recipient_profile(data.recipient_name)
+
+#         recipient_found = profile["found"]
+#         history_available = profile["history_available"]
+
+#         recipient = profile["recipient"]
+
+#         recipient_is_known = (
+#             recipient_found
+#             and recipient["verified_by_user"]
+#             and recipient["is_active"]
+#         )
+
+#         # Use the historical median only when sufficient history exists.
+#         typical_amount = (
+#             profile["typical_amount"]
+#             if history_available
+#             else 0.0
+#         )
+
+#         context = PaymentContext(
+#             recipient_is_known=recipient_is_known,
+#             amount=data.amount,
+#             typical_amount=typical_amount,
+#             recipient_match_confidence=data.recipient_match_confidence,
+#             voice_intent_confidence=data.voice_intent_confidence,
+#         )
 
 #         context_features = extract_context_features(context)
 #         context_result = score_payment_context(context_features)
@@ -102,16 +149,42 @@
 #         risk = assess_risk(
 #             fraud_probability=None,
 #             context_score=context_result["context_score"],
+#             recipient_match_confidence=data.recipient_match_confidence
 #         )
 
-#         payment_decision = (
-#             "BLOCK"
-#             if risk["decision"] == "BLOCK"
-#             else "AWAITING_CONFIRMATION"
+#         # Unknown recipients or insufficient history require review.
+#         manual_verification_required = (
+#             not recipient_is_known or not history_available
 #         )
+
+#         if (
+#             manual_verification_required
+#             and risk["decision"] != "REQUEST_CLARIFICATION"
+#         ):
+#             risk = {
+#                 "risk_level": "REVIEW",
+#                 "decision": "WARN",
+#                 "reason": (
+#                     "Recipient identity or transaction history could "
+#                     "not be sufficiently verified. Please review the "
+#                     "recipient and payment details."
+#                 ),
+#             }
+
+#         payment_decision = get_payment_decision(risk)
+
+#         if not recipient_found:
+#             recipient_status = "NOT_IN_SAVED_CONTACTS"
+#         elif not recipient["is_active"]:
+#             recipient_status = "INACTIVE"
+#         elif not recipient["verified_by_user"]:
+#             recipient_status = "NOT_VERIFIED"
+#         else:
+#             recipient_status = "KNOWN_VERIFIED_RECIPIENT"
 
 #         logger.info(
-#             "Context assessment completed | score=%.4f | decision=%s",
+#             "Context assessment | recipient=%s | score=%.4f | decision=%s",
+#             data.recipient_name,
 #             context_result["context_score"],
 #             risk["decision"],
 #         )
@@ -120,15 +193,34 @@
 #             "assessment_type": "CONTEXT_ONLY",
 #             "fraud_model_status": "NOT_EVALUATED",
 #             "fraud_probability": None,
+
+#             "recipient": {
+#                 "requested_name": data.recipient_name,
+#                 "status": recipient_status,
+#                 "profile": recipient,
+#                 "successful_transaction_count": profile["transaction_count"],
+#                 "last_paid": profile["last_paid"],
+#                 "history_available": history_available,
+#             },
+
+#             "payment": {
+#                 "amount": data.amount,
+#                 "historical_typical_amount": typical_amount,
+#                 "amount_baseline_available": history_available,
+#             },
+
 #             "context_score": context_result["context_score"],
 #             "context_risk_level": context_result["context_risk_level"],
 #             "context_signals": context_result["context_signals"],
 #             "scoring_weights": context_result["scoring_weights"],
+
 #             "risk_level": risk["risk_level"],
 #             "risk_decision": risk["decision"],
 #             "reason": risk["reason"],
+
+#             "manual_verification_required": manual_verification_required,
 #             "payment_decision": payment_decision,
-#             "confirmation_required": payment_decision != "BLOCK",
+#             "confirmation_required": payment_decision == "AWAITING_CONFIRMATION",
 #             "payment_execution": "NOT_EXECUTED",
 #         }
 
@@ -138,15 +230,13 @@
 #         logger.exception("Context assessment failed")
 #         raise HTTPException(
 #             status_code=500,
-#             detail="Context assessment failed. Check the backend logs.",
+#             detail="Context assessment failed. Check backend logs.",
 #         )
 
 
 # @app.post("/predict-context")
 # def predict_context(data: ContextPredictionRequest):
-#     """
-#     Combined IEEE-CIS fraud-model and contextual assessment.
-#     """
+#     """Run combined IEEE-CIS and contextual assessment."""
 
 #     try:
 #         fraud_probability = predict_fraud_probability(
@@ -154,20 +244,16 @@
 #         )
 
 #         context = build_payment_context(data.context)
-
 #         context_features = extract_context_features(context)
 #         context_result = score_payment_context(context_features)
 
 #         risk = assess_risk(
 #             fraud_probability=fraud_probability,
 #             context_score=context_result["context_score"],
+#             recipient_match_confidence=data.context.recipient_match_confidence
 #         )
 
-#         payment_decision = (
-#             "BLOCK"
-#             if risk["decision"] == "BLOCK"
-#             else "AWAITING_CONFIRMATION"
-#         )
+#         payment_decision = get_payment_decision(risk)
 
 #         return {
 #             "assessment_type": "HYBRID",
@@ -182,7 +268,7 @@
 #             "risk_decision": risk["decision"],
 #             "reason": risk["reason"],
 #             "payment_decision": payment_decision,
-#             "confirmation_required": payment_decision != "BLOCK",
+#             "confirmation_required": payment_decision == "AWAITING_CONFIRMATION",
 #             "payment_execution": "NOT_EXECUTED",
 #         }
 
@@ -192,12 +278,119 @@
 #         logger.exception("Hybrid prediction failed")
 #         raise HTTPException(
 #             status_code=500,
-#             detail="Hybrid prediction failed. Check the backend logs.",
+#             detail="Hybrid prediction failed. Check backend logs.",
 #         )
 
+# @app.post("/voice-payment")
+# async def voice_payment(file: UploadFile = File(...)):
+#     """Transcribe a voice command, extract payment intent, and assess context."""
 
+#     try:
+#         if file.content_type not in (
+#             "audio/wav",
+#             "audio/x-wav",
+#             "audio/wave",
+#             "application/octet-stream",
+#         ):
+#             raise HTTPException(
+#                 status_code=415,
+#                 detail="Please upload a WAV audio file.",
+#             )
+
+#         audio_bytes = await file.read()
+
+#         if not audio_bytes:
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="Uploaded audio file is empty.",
+#             )
+
+#         if len(audio_bytes) > 10 * 1024 * 1024:
+#             raise HTTPException(
+#                 status_code=413,
+#                 detail="Audio file must be smaller than 10 MB.",
+#             )
+
+#         # Step 1: Speech-to-text
+#         transcript = transcribe_audio(audio_bytes)
+
+#         # Step 2: Extract payment intent
+#         intent = extract_payment_intent(transcript)
+
+#         if intent["intent"] != "PAYMENT" or intent["requires_clarification"]:
+#             return {
+#                 "status": "CLARIFICATION_REQUIRED",
+#                 "transcript": transcript,
+#                 "intent": intent,
+#                 "reason": "Payment details are incomplete or unclear.",
+#                 "payment_execution": "NOT_EXECUTED",
+#             }
+
+#         # Step 3: Resolve recipient against saved contacts
+#         profile = get_recipient_profile(intent["recipient_name"])
+
+#         if not profile["found"]:
+#             return {
+#                 "status": "CLARIFICATION_REQUIRED",
+#                 "transcript": transcript,
+#                 "intent": intent,
+#                 "reason": (
+#                     "Recipient could not be uniquely matched "
+#                     "to a saved contact."
+#                 ),
+#                 "payment_execution": "NOT_EXECUTED",
+#             }
+
+#         recipient = profile["recipient"]
+
+#         # Do not assess or proceed with inactive/unverified recipients.
+#         if not recipient["is_active"] or not recipient["verified_by_user"]:
+#             return {
+#                 "status": "VERIFICATION_REQUIRED",
+#                 "transcript": transcript,
+#                 "intent": intent,
+#                 "recipient": recipient,
+#                 "reason": "Recipient requires verification.",
+#                 "payment_execution": "NOT_EXECUTED",
+#             }
+
+#         # Step 4: Run the existing context assessment.
+#         # These confidence values are provisional demo assumptions,
+#         # not confidence scores produced by Whisper.
+#         assessment = assess_context(
+#             ContextAssessmentRequest(
+#                 recipient_name=recipient["name"],
+#                 amount=intent["amount"],
+#                 recipient_match_confidence=0.95,
+#                 voice_intent_confidence=0.95,
+#             )
+#         )
+
+#         return {
+#             "status": "ASSESSMENT_COMPLETED",
+#             "transcript": transcript,
+#             "intent": intent,
+#             "assessment": assessment,
+#             "payment_execution": "NOT_EXECUTED",
+#         }
+
+#     except HTTPException:
+#         raise
+#     except ValueError as exc:
+#         raise HTTPException(status_code=422, detail=str(exc))
+#     except Exception:
+#         logger.exception("Voice payment assessment failed")
+#         raise HTTPException(
+#             status_code=500,
+#             detail="Voice payment assessment failed. Check backend logs.",
+#         )
+#     finally:
+#         await file.close()
+        
 # @app.post("/transcribe")
 # async def transcribe(file: UploadFile = File(...)):
+#     """Transcribe a WAV audio recording."""
+
 #     try:
 #         if file.content_type not in (
 #             "audio/wav",
@@ -255,7 +448,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.config.thresholds import FRAUD_THRESHOLD
 from backend.app.logger import logger
 from backend.app.risk.decision import assess_risk
-from backend.app.risk.model import predict_fraud_probability
 from backend.app.risk.features import (
     PaymentContext,
     extract_context_features,
@@ -273,8 +465,9 @@ from backend.app.voice.intent_extraction import extract_payment_intent
 
 app = FastAPI(
     title="VeriPay CPDE API",
-    version="0.5.0",
+    version="0.6.0",
 )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -299,7 +492,7 @@ def health():
 
 
 def build_payment_context(data: PaymentContextRequest) -> PaymentContext:
-    """Build context for the existing hybrid assessment."""
+    """Build the context inputs for the six-signal CPDE."""
 
     return PaymentContext(
         recipient_is_known=data.recipient_is_known,
@@ -307,19 +500,56 @@ def build_payment_context(data: PaymentContextRequest) -> PaymentContext:
         typical_amount=data.typical_amount,
         recipient_match_confidence=data.recipient_match_confidence,
         voice_intent_confidence=data.voice_intent_confidence,
+        urgency_detected=data.urgency_detected,
+        unusual_time=data.unusual_time,
+        repeated_failures=data.repeated_failures,
     )
 
 
-def get_payment_decision(risk):
-    decision = risk["decision"]
+def build_cpde_response(
+    context_result: dict,
+    assessment_type: str,
+    fraud_probability=None,
+    fraud_model_status="NOT_EVALUATED",
+    extra_fields=None,
+) -> dict:
+    """Map the CPDE result to the response fields used by the frontend."""
+
+    decision = context_result["decision"]
+    risk_score = context_result["risk_score"]
+    risk_level = context_result["risk_level"]
+    reasons = context_result["reasons"]
 
     if decision == "BLOCK":
-        return "BLOCK"
+        payment_decision = "BLOCK"
+    elif decision == "CLARIFY":
+        payment_decision = "CLARIFICATION_REQUIRED"
+    elif decision == "ALLOW":
+        payment_decision = "ALLOW"
+    else:
+        payment_decision = "AWAITING_CONFIRMATION"
 
-    if decision == "REQUEST_CLARIFICATION":
-        return "REQUEST_CLARIFICATION"
+    response = {
+        "assessment_type": assessment_type,
+        "fraud_model_status": fraud_model_status,
+        "fraud_probability": fraud_probability,
+        "context_score": risk_score,
+        "context_risk_level": risk_level,
+        "context_signals": context_result["risk_signals"],
+        "scoring_weights": context_result["scoring_weights"],
+        "risk_level": risk_level,
+        "risk_decision": decision,
+        "decision": decision,
+        "reason": " ".join(reasons),
+        "payment_decision": payment_decision,
+        "confirmation_required": payment_decision == "AWAITING_CONFIRMATION",
+        "payment_execution": "NOT_EXECUTED",
+    }
 
-    return "AWAITING_CONFIRMATION"
+    if extra_fields:
+        response.update(extra_fields)
+
+    return response
 
 
 @app.post("/predict")
@@ -327,6 +557,9 @@ def predict(data: list[float | None]):
     """Run the standalone IEEE-CIS fraud model."""
 
     try:
+        # Lazy import prevents loading the large model during API startup.
+        from backend.app.risk.model import predict_fraud_probability
+
         probability = predict_fraud_probability(data)
         risk = assess_risk(fraud_probability=probability)
 
@@ -354,24 +587,20 @@ def predict(data: list[float | None]):
         logger.exception("Prediction failed")
         raise HTTPException(
             status_code=500,
-            detail="Prediction failed. Check backend logs.",
+            detail="Prediction failed. Check the backend logs.",
         )
 
 
 @app.post("/assess-context")
 def assess_context(data: ContextAssessmentRequest):
-    """
-    Assess payment context using backend-managed recipient history.
-    The IEEE-CIS model is not invoked by this endpoint.
-    """
+    """Assess payment context using backend-managed recipient history."""
 
     try:
         profile = get_recipient_profile(data.recipient_name)
 
         recipient_found = profile["found"]
-        history_available = profile["history_available"]
-
         recipient = profile["recipient"]
+        history_available = profile["history_available"]
 
         recipient_is_known = (
             recipient_found
@@ -379,7 +608,6 @@ def assess_context(data: ContextAssessmentRequest):
             and recipient["is_active"]
         )
 
-        # Use the historical median only when sufficient history exists.
         typical_amount = (
             profile["typical_amount"]
             if history_available
@@ -392,37 +620,19 @@ def assess_context(data: ContextAssessmentRequest):
             typical_amount=typical_amount,
             recipient_match_confidence=data.recipient_match_confidence,
             voice_intent_confidence=data.voice_intent_confidence,
+            fraud_probability=0.0,
+            recipient_match_count=profile["match_count"],
+            urgency_detected=data.urgency_detected,
+            unusual_time=data.unusual_time,
+            repeated_failures=data.repeated_failures,
         )
 
         context_features = extract_context_features(context)
         context_result = score_payment_context(context_features)
 
-        risk = assess_risk(
-            fraud_probability=None,
-            context_score=context_result["context_score"],
-            recipient_match_confidence=data.recipient_match_confidence
-        )
-
-        # Unknown recipients or insufficient history require review.
         manual_verification_required = (
             not recipient_is_known or not history_available
         )
-
-        if (
-            manual_verification_required
-            and risk["decision"] != "REQUEST_CLARIFICATION"
-        ):
-            risk = {
-                "risk_level": "REVIEW",
-                "decision": "WARN",
-                "reason": (
-                    "Recipient identity or transaction history could "
-                    "not be sufficiently verified. Please review the "
-                    "recipient and payment details."
-                ),
-            }
-
-        payment_decision = get_payment_decision(risk)
 
         if not recipient_found:
             recipient_status = "NOT_IN_SAVED_CONTACTS"
@@ -434,46 +644,35 @@ def assess_context(data: ContextAssessmentRequest):
             recipient_status = "KNOWN_VERIFIED_RECIPIENT"
 
         logger.info(
-            "Context assessment | recipient=%s | score=%.4f | decision=%s",
+            "Context assessment | recipient=%s | score=%s | decision=%s",
             data.recipient_name,
-            context_result["context_score"],
-            risk["decision"],
+            context_result["risk_score"],
+            context_result["decision"],
         )
 
-        return {
-            "assessment_type": "CONTEXT_ONLY",
-            "fraud_model_status": "NOT_EVALUATED",
-            "fraud_probability": None,
-
-            "recipient": {
-                "requested_name": data.recipient_name,
-                "status": recipient_status,
-                "profile": recipient,
-                "successful_transaction_count": profile["transaction_count"],
-                "last_paid": profile["last_paid"],
-                "history_available": history_available,
+        return build_cpde_response(
+            context_result=context_result,
+            assessment_type="CONTEXT_ONLY",
+            fraud_probability=None,
+            fraud_model_status="NOT_EVALUATED",
+            extra_fields={
+                "recipient": {
+                    "requested_name": data.recipient_name,
+                    "status": recipient_status,
+                    "profile": recipient,
+                    "match_count": profile["match_count"],
+                    "successful_transaction_count": profile["transaction_count"],
+                    "last_paid": profile["last_paid"],
+                    "history_available": history_available,
+                },
+                "payment": {
+                    "amount": data.amount,
+                    "historical_typical_amount": typical_amount,
+                    "amount_baseline_available": history_available,
+                },
+                "manual_verification_required": manual_verification_required,
             },
-
-            "payment": {
-                "amount": data.amount,
-                "historical_typical_amount": typical_amount,
-                "amount_baseline_available": history_available,
-            },
-
-            "context_score": context_result["context_score"],
-            "context_risk_level": context_result["context_risk_level"],
-            "context_signals": context_result["context_signals"],
-            "scoring_weights": context_result["scoring_weights"],
-
-            "risk_level": risk["risk_level"],
-            "risk_decision": risk["decision"],
-            "reason": risk["reason"],
-
-            "manual_verification_required": manual_verification_required,
-            "payment_decision": payment_decision,
-            "confirmation_required": payment_decision == "AWAITING_CONFIRMATION",
-            "payment_execution": "NOT_EXECUTED",
-        }
+        )
 
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -487,9 +686,12 @@ def assess_context(data: ContextAssessmentRequest):
 
 @app.post("/predict-context")
 def predict_context(data: ContextPredictionRequest):
-    """Run combined IEEE-CIS and contextual assessment."""
+    """Run the IEEE-CIS model and the notebook's six-signal CPDE."""
 
     try:
+        # Load the large fraud model only when this endpoint is called.
+        from backend.app.risk.model import predict_fraud_probability
+
         fraud_probability = predict_fraud_probability(
             data.transaction_features
         )
@@ -498,30 +700,23 @@ def predict_context(data: ContextPredictionRequest):
         context_features = extract_context_features(context)
         context_result = score_payment_context(context_features)
 
-        risk = assess_risk(
-            fraud_probability=fraud_probability,
-            context_score=context_result["context_score"],
-            recipient_match_confidence=data.context.recipient_match_confidence
+        logger.info(
+            "Hybrid CPDE assessment | fraud_probability=%.4f | "
+            "context_score=%s | decision=%s",
+            fraud_probability,
+            context_result["risk_score"],
+            context_result["decision"],
         )
 
-        payment_decision = get_payment_decision(risk)
-
-        return {
-            "assessment_type": "HYBRID",
-            "fraud_model_status": "EVALUATED",
-            "fraud_probability": fraud_probability,
-            "fraud_threshold": FRAUD_THRESHOLD,
-            "context_score": context_result["context_score"],
-            "context_risk_level": context_result["context_risk_level"],
-            "context_signals": context_result["context_signals"],
-            "scoring_weights": context_result["scoring_weights"],
-            "risk_level": risk["risk_level"],
-            "risk_decision": risk["decision"],
-            "reason": risk["reason"],
-            "payment_decision": payment_decision,
-            "confirmation_required": payment_decision == "AWAITING_CONFIRMATION",
-            "payment_execution": "NOT_EXECUTED",
-        }
+        return build_cpde_response(
+            context_result=context_result,
+            assessment_type="HYBRID",
+            fraud_probability=fraud_probability,
+            fraud_model_status="EVALUATED",
+            extra_fields={
+                "fraud_threshold": FRAUD_THRESHOLD,
+            },
+        )
 
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -532,9 +727,10 @@ def predict_context(data: ContextPredictionRequest):
             detail="Hybrid prediction failed. Check backend logs.",
         )
 
+
 @app.post("/voice-payment")
 async def voice_payment(file: UploadFile = File(...)):
-    """Transcribe a voice command, extract payment intent, and assess context."""
+    """Transcribe a voice command, extract intent, and assess context."""
 
     try:
         if file.content_type not in (
@@ -562,13 +758,13 @@ async def voice_payment(file: UploadFile = File(...)):
                 detail="Audio file must be smaller than 10 MB.",
             )
 
-        # Step 1: Speech-to-text
         transcript = transcribe_audio(audio_bytes)
-
-        # Step 2: Extract payment intent
         intent = extract_payment_intent(transcript)
 
-        if intent["intent"] != "PAYMENT" or intent["requires_clarification"]:
+        if (
+            intent["intent"] != "PAYMENT"
+            or intent["requires_clarification"]
+        ):
             return {
                 "status": "CLARIFICATION_REQUIRED",
                 "transcript": transcript,
@@ -577,7 +773,6 @@ async def voice_payment(file: UploadFile = File(...)):
                 "payment_execution": "NOT_EXECUTED",
             }
 
-        # Step 3: Resolve recipient against saved contacts
         profile = get_recipient_profile(intent["recipient_name"])
 
         if not profile["found"]:
@@ -594,7 +789,6 @@ async def voice_payment(file: UploadFile = File(...)):
 
         recipient = profile["recipient"]
 
-        # Do not assess or proceed with inactive/unverified recipients.
         if not recipient["is_active"] or not recipient["verified_by_user"]:
             return {
                 "status": "VERIFICATION_REQUIRED",
@@ -605,9 +799,8 @@ async def voice_payment(file: UploadFile = File(...)):
                 "payment_execution": "NOT_EXECUTED",
             }
 
-        # Step 4: Run the existing context assessment.
-        # These confidence values are provisional demo assumptions,
-        # not confidence scores produced by Whisper.
+        # Provisional demo confidence values.
+        # These are not confidence scores produced by Whisper.
         assessment = assess_context(
             ContextAssessmentRequest(
                 recipient_name=recipient["name"],
@@ -637,7 +830,8 @@ async def voice_payment(file: UploadFile = File(...)):
         )
     finally:
         await file.close()
-        
+
+
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
     """Transcribe a WAV audio recording."""

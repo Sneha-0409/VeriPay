@@ -55,7 +55,7 @@ a {
   background: var(--bg);
   width: 100%;
   max-width: 100vw;
-  overflow-x: hidden;
+  overflow-x: clip;
   position: relative;
 }
 
@@ -241,6 +241,9 @@ a {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   height: 75px;
   display: flex;
   justify-content: space-between;
@@ -249,6 +252,10 @@ a {
   color: #c4bdcf;
   font-size: 12px;
   width: 100%;
+  background: rgba(16, 13, 24, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-sizing: border-box;
 }
 
 .topbar-left {
@@ -2177,10 +2184,30 @@ textarea {
     min-height: 100dvh;
   }
 
-  /* 3. Topbar */
+  /* 3. Topbar (Sticky at top with safe-area notch padding & edge-to-edge frosted glass) */
   .topbar {
-    height: 62px;
-    padding: 0;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    height: auto !important;
+    min-height: 56px !important;
+    padding-top: max(env(safe-area-inset-top, 0px), 12px) !important;
+    padding-bottom: 12px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    margin-left: -16px !important;
+    margin-right: -16px !important;
+    width: calc(100% + 32px) !important;
+    background: rgba(16, 13, 24, 0.94) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-bottom: 1px solid var(--border) !important;
+    box-sizing: border-box !important;
+  }
+
+  .sidebar {
+    padding-top: max(env(safe-area-inset-top, 0px), 24px) !important;
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px) !important;
   }
 
   .topbar-left {

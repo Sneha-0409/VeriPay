@@ -3,7 +3,7 @@ import VeriPayLoader from "./components/VeriPayLoader";
 import { useState, useRef, useEffect } from "react";
 import "./App.css";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://veripay-backend-214543665633.asia-south1.run.app";
 const TARGET_SAMPLE_RATE = 16000;
 
 const initialForm = {

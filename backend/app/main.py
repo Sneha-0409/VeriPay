@@ -336,37 +336,37 @@ async def voice_payment(file: UploadFile = File(...)):
         # Multiple contacts match: ask the user to choose.
             if profile["match_count"] > 1:
                 return {
-                "status": "RECIPIENT_SELECTION_REQUIRED",
+                    "status": "RECIPIENT_SELECTION_REQUIRED",
+                    "transcript": transcript,
+                    "intent": intent,
+                    "recipient_match_count": profile["match_count"],
+                    "candidate_recipients": profile["candidate_recipients"],
+                    "reason": profile["clarification_message"],
+                    "payment_execution": "NOT_EXECUTED",
+                }
+        # No matching contact found.
+            return {
+                "status": "RECIPIENT_NOT_FOUND",
                 "transcript": transcript,
                 "intent": intent,
-                "recipient_match_count": profile["match_count"],
-                "candidate_recipients": profile["candidate_recipients"],
-                "reason": profile["clarification_message"],
+                "recipient_match_count": 0,
+                "candidate_recipients": [],
+                "reason": "No saved contact matched the requested recipient.",
                 "payment_execution": "NOT_EXECUTED",
             }
-
-        # No matching contact found.
-        return {
-            "status": "RECIPIENT_NOT_FOUND",
-            "transcript": transcript,
-            "intent": intent,
-            "recipient_match_count": 0,
-            "candidate_recipients": [],
-            "reason": "No saved contact matched the requested recipient.",
-            "payment_execution": "NOT_EXECUTED",
-        }
 
         recipient = profile["recipient"]
 
+
         if not recipient["is_active"] or not recipient["verified_by_user"]:
             return {
-                "status": "VERIFICATION_REQUIRED",
-                "transcript": transcript,
-                "intent": intent,
-                "recipient": recipient,
-                "reason": "Recipient requires verification.",
-                "payment_execution": "NOT_EXECUTED",
-            }
+                 "status": "VERIFICATION_REQUIRED",
+                 "transcript": transcript,
+                 "intent": intent,
+                 "recipient": recipient,
+                 "reason": "Recipient requires verification.",
+                 "payment_execution": "NOT_EXECUTED",
+             }
 
         # Provisional demo confidence values.
         # These are not confidence scores produced by Whisper.

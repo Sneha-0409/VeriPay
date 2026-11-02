@@ -23,7 +23,7 @@
                     "is_active": true
                 },
                 {
-                    "recipient_id": "recipient_002",
+                    "recipient_id": "recipient_003",
                     "name": "Priya Verma",
                     "upi_id": "priya.demo@upi",
                     "is_active": true,
@@ -33,14 +33,42 @@
                     "total_transactions": 8
                 },
                 {
-                    "recipient_id": "recipient_003",
-                    "name": "Amit Kumar",
-                    "upi_id": "amit.demo@upi",
+                    "recipient_id": "recipient_004",
+                    "name": "Aman Kumar",
+                    "upi_id": "aman.demo@upi",
                     "is_active": true,
                     "verified_by_user": false,
                     "first_added": "2026-09-10",
                     "last_paid": "2026-10-20",
                     "total_transactions": 3
+                },
+                {
+                    "recipient_id": "recipient_005",
+                    "name": "Neha Gupta",
+                    "upi_id": "neha.gupta@mockupi",
+                    "is_active": true,
+                    "verified_by_user": true
+                },
+                {
+                    "recipient_id": "recipient_006",
+                    "name": "Aman Singh",
+                    "upi_id": "aman.singh@mockupi",
+                    "is_active": true,
+                    "verified_by_user": true
+                },
+                {
+                    "recipient_id": "recipient_007",
+                    "name": "Riya Sharma",
+                    "upi_id": "riya.sharma@mockupi",
+                    "is_active": true,
+                    "verified_by_user": false
+                },
+                {
+                    "recipient_id": "recipient_008",
+                    "name": "Karan Patel",
+                    "upi_id": "karan.patel@mockupi",
+                    "is_active": true,
+                    "verified_by_user": true
                 }
             ]
         }

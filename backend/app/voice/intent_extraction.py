@@ -163,7 +163,11 @@ def normalize_transcript(transcript: str) -> str:
 
     # Correct observed/context-specific ASR errors.
     text = re.sub(r"^\s*saan\b", "send", text)
-    text = re.sub(r"\b2\b(?=\s+[a-z])", "to", text)
+    text = re.sub(
+    r"\b(send|pay|transfer)\s+2\s+(?!(?:lakh|lakhs|thousand|crore|rupees|rs|inr)\b)([a-z])",
+    r"\1 to \2",
+    text,
+)
 
     return re.sub(r"\s+", " ", text).strip()
 
@@ -219,12 +223,14 @@ def extract_payment_intent(transcript: str) -> dict:
     )
 
     # ---------------------------------------------------------
-    # 3. Extract numeric amount
+    # 3. Extract numeric amount, including Indian number units
     # ---------------------------------------------------------
 
     amount_match = re.search(
         r"\b(?:rs\.?|inr|rupees?)?\s*"
-        r"(\d+(?:,\d{3})*(?:\.\d+)?)"
+        r"(\d+(?:,\d{2,3})*(?:\.\d+)?)"
+        r"\s*(lakh|lakhs|lac|lacs|thousand|thousands|"
+        r"crore|crores|million|k)?"
         r"\s*(?:rupees?|rs\.?|inr)?\b",
         normalized,
     )
@@ -234,6 +240,23 @@ def extract_payment_intent(transcript: str) -> dict:
     if amount_match:
         try:
             amount = float(amount_match.group(1).replace(",", ""))
+
+            unit = (amount_match.group(2) or "").lower()
+
+            multipliers = {
+                "lakh": 100_000,
+                "lakhs": 100_000,
+                "lac": 100_000,
+                "lacs": 100_000,
+                "thousand": 1_000,
+                "thousands": 1_000,
+                "crore": 10_000_000,
+                "crores": 10_000_000,
+                "million": 1_000_000,
+                "k": 1_000,
+            }
+
+            amount *= multipliers.get(unit, 1)
 
             if amount <= 0:
                 amount = None
@@ -314,17 +337,23 @@ def extract_payment_intent(transcript: str) -> dict:
 
         for word in words:
 
-            if word in RECIPIENT_STOP_WORDS:
-                break
+    # Remove punctuation at the beginning or end of a name token.
+            word = word.strip(".,!?;:")
 
-            if not re.fullmatch(r"[a-z]+", word):
-                break
+            if not word:
+                    continue
 
-            cleaned_words.append(word)
+            if word.lower() in RECIPIENT_STOP_WORDS:
+                    break
 
-            # Prototype supports up to three name tokens.
+            if not re.fullmatch(r"[a-z]+", word.lower()):
+                    break
+
+            cleaned_words.append(word.lower())
+
+                # Prototype supports up to three name tokens.
             if len(cleaned_words) >= 3:
-                break
+                    break
 
         if cleaned_words:
             recipient_name = " ".join(cleaned_words).title()
